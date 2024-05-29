@@ -24,6 +24,7 @@ class UserAgentServiceTest: XCTestCase {
         expectationUserAgentExecuted = expectation(description: "expectationUserAgentExecuted")
         
         let userAgentService = UserAgentService.shared
+        userAgentService.resetDefaults()
         
         userAgentService.fetchUserAgent { [weak self] userAgentString in
             XCTAssert(userAgentService.userAgent == userAgentString)
@@ -46,6 +47,7 @@ class UserAgentServiceTest: XCTestCase {
     
     func testSharedCreation() {
         let uaServiceShared = UserAgentService.shared
+
         XCTAssertNotNil(uaServiceShared)
         XCTAssert(uaServiceShared === UserAgentService.shared)
     }
