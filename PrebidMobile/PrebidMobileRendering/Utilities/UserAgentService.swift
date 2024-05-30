@@ -33,7 +33,7 @@ public class UserAgentService: NSObject {
     public static let shared = UserAgentService()
     
     // Constants
-    private var webView: WKWebView?
+    private var webViews: [WKWebView] = []
     private let semaphore = DispatchSemaphore(value: 1)
     private var _userAgent: String = ""
     
@@ -92,21 +92,20 @@ public class UserAgentService: NSObject {
             return
         }
         
-        // Create the webView on the main thread
-        DispatchQueue.main.async {
-            self.webView = WKWebView()
-        }
-        
         // Evaluate JavaScript with a delay to ensure webView is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            guard let self, let webView = self.webView else {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
                 completion?("")
                 return
             }
+            
+            let webView = WKWebView()
+            self.webViews.append(webView)
+            
             webView.evaluateJavaScript("navigator.userAgent", completionHandler: { result, error in
                 // Deallocate the webview as it's not needed anymore
-                self.webView = nil
-                
+                self.webViews.removeAll(where: { $0 == webView })
+
                 if let error {
                     Log.error(error.localizedDescription)
                 }
