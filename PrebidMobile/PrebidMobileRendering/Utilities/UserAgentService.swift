@@ -33,7 +33,6 @@ public class UserAgentService: NSObject {
     public static let shared = UserAgentService()
     
     // Constants
-    private var webViews: [WKWebView] = []
     private let semaphore = DispatchSemaphore(value: 1)
     private var _userAgent: String = ""
     
@@ -66,22 +65,18 @@ public class UserAgentService: NSObject {
      */
     public override init() {
         super.init()
-        if let ua = userAgentFromDefaults {
+        if let ua = UserAgentStore().userAgent {
             _userAgent = ua
         } else {
-            fetchUserAgent { [weak self] ua in
-                guard let self = self else { return }
-                /// Persist the user agnet string for next app launch
-                self.userAgentFromDefaults = ua
-            }
+            fetchUserAgent { _ in }
         }
     }
     
     /**
      Fetches the user agent string using a WKWebView.
      
-     This method runs the WKWebView operation on the main thread with a delay and uses a completion handler
-     to return the fetched user agent or a fallback value.
+     This method uses a completion handler to return the fetched user agent string. If the user agent
+     string has already been generated, the completion handler is called immediately with the cached value.
      
      - Parameter completion: A closure that is called with the fetched user agent string.
      */
@@ -92,13 +87,33 @@ public class UserAgentService: NSObject {
             return
         }
         
-        // Evaluate JavaScript with a delay to ensure webView is ready
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                completion?("")
-                return
-            }
-            
+        let fetcher = UserAgentFetcher()
+        fetcher.fetchUserAgent { ua in
+            self.userAgent = ua
+            UserAgentStore().userAgent = ua
+            completion?(self.userAgent)
+        }
+    }
+}
+
+/**
+ A helper class that handles fetching the user agent string using a WKWebView.
+ */
+class UserAgentFetcher {
+    
+    private var webViews: [WKWebView] = []
+
+    /**
+     Fetches the user agent string using a WKWebView.
+     
+     This method runs the WKWebView operation on the main thread and uses a completion handler
+     to return the fetched user agent or a fallback value.
+     
+     - Parameter completion: A closure that is called with the fetched user agent string.
+     */
+    public func fetchUserAgent(completion: ((String) -> Void)? = nil) {
+        // Evaluate JavaScript to get the user agent string
+        DispatchQueue.main.async {
             let webView = WKWebView()
             self.webViews.append(webView)
             
@@ -107,22 +122,23 @@ public class UserAgentService: NSObject {
                 self.webViews.removeAll(where: { $0 == webView })
 
                 if let error {
-                    Log.error(error.localizedDescription)
+                    print("Error evaluating JavaScript: \(error.localizedDescription)")
                 }
                 
                 if let ua = result as? String, !ua.isEmpty  {
-                    self.userAgent = "\(ua)"
+                    completion?("\(ua)")
+                } else {
+                    completion?("")
                 }
-                completion?(self.userAgent)
             })
         }
     }
 }
 
 /**
- An extension of `UserAgentService` that handles persistence of the user agent string in UserDefaults.
+ A class that handles persistence of the user agent string in UserDefaults.
  */
-extension UserAgentService {
+class UserAgentStore {
     
     /// The key used to store the user agent dictionary in UserDefaults.
     private var userDefaultsKey: String {
@@ -140,7 +156,7 @@ extension UserAgentService {
     }
     
     /// Computed property to get and set the user agent for the current OS version in UserDefaults.
-    private var userAgentFromDefaults: String? {
+    var userAgent: String? {
         get {
             return userAgentDictionary[osVersion]
         }
