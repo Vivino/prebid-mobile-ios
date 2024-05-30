@@ -55,7 +55,6 @@ public class UserAgentService: NSObject {
             semaphore.wait()
             defer { semaphore.signal() }
             _userAgent = newValue
-            userAgentFromDefaults = newValue
         }
     }
     
@@ -72,7 +71,8 @@ public class UserAgentService: NSObject {
         } else {
             fetchUserAgent { [weak self] ua in
                 guard let self = self else { return }
-                self.userAgent = ua
+                /// Persist the user agnet string for next app launch
+                self.userAgentFromDefaults = ua
             }
         }
     }
@@ -96,13 +96,14 @@ public class UserAgentService: NSObject {
         DispatchQueue.main.async {
             self.webView = WKWebView()
         }
+        
         // Evaluate JavaScript with a delay to ensure webView is ready
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
             guard let self, let webView = self.webView else {
                 completion?("")
                 return
             }
-            webView.evaluateJavaScript("navigator.userAgent") { result, error in
+            webView.evaluateJavaScript("navigator.userAgent", completionHandler: { result, error in
                 // Deallocate the webview as it's not needed anymore
                 self.webView = nil
                 
@@ -110,10 +111,11 @@ public class UserAgentService: NSObject {
                     Log.error(error.localizedDescription)
                 }
                 
-                let ua = result as? String ?? ""
-                self.userAgent = ua
-                completion?(ua)
-            }
+                if let ua = result as? String, !ua.isEmpty  {
+                    self.userAgent = "\(ua)"
+                }
+                completion?(self.userAgent)
+            })
         }
     }
 }
