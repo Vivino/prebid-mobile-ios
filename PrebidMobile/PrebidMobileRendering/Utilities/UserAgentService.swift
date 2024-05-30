@@ -97,13 +97,12 @@ public class UserAgentService: NSObject {
             self.webView = WKWebView()
         }
         // Evaluate JavaScript with a delay to ensure webView is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            self.webView?.evaluateJavaScript("navigator.userAgent") { [weak self] result, error in
-                guard let self else {
-                    completion?("")
-                    return
-                }
-                
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self, let webView = self.webView else {
+                completion?("")
+                return
+            }
+            webView.evaluateJavaScript("navigator.userAgent") { result, error in
                 // Deallocate the webview as it's not needed anymore
                 self.webView = nil
                 
@@ -111,11 +110,9 @@ public class UserAgentService: NSObject {
                     Log.error(error.localizedDescription)
                 }
                 
-                if let ua = result as? String {
-                    completion?(ua)
-                } else {
-                    completion?("") // Fallback user agent string
-                }
+                let ua = result as? String ?? ""
+                self.userAgent = ua
+                completion?(ua)
             }
         }
     }
